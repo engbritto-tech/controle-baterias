@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gestão de Baterias</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; color: #333; }
+    .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    h2 { color: #0056b3; }
+    
+    /* BARRA DE CONFIGURAÇÃO DA API GOOGLE SHEETS */
+    .api-config-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #fff3cd;
+      border: 1px solid #ffeeba;
+      padding: 10px 15px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .api-config-bar.ok {
+      background: #d4edda;
+      border-color: #c3e6cb;
+      color: #155724;
+    }
+    .btn-config-api {
+      padding: 6px 12px;
+      background: #856404;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .api-config-bar.ok .btn-config-api {
+      background: #155724;
+    }
+
+    /* BARRA DE CONTROLE BLUETOOTH (ESP32) */
+    .ble-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #eef4fb;
+      border: 1px solid #b8daff;
+      padding: 12px 15px;
+      border-radius: 8px;
+      margin-bottom: 18px;
+    }
+    .ble-status {
+      font-size: 14px;
+      font-weight: bold;
+      color: #004085;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ble-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #dc3545;
+      display: inline-block;
+    }
+    .ble-dot.connected {
+      background-color: #28a745;
+      box-shadow: 0 0 6px #28a745;
+    }
+    .ble-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-ble {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      font-size: 13px;
+      cursor: pointer;
+      color: white;
+      transition: 0.2s;
+    }
+    .btn-ble-connect { background-color: #0056b3; }
+    .btn-ble-connect:hover { background-color: #004085; }
+    .btn-ble-sn { background-color: #17a2b8; }
+    .btn-ble-sn:hover:not(:disabled) { background-color: #138496; }
+    .btn-ble-soh { background-color: #fd7e14; }
+    .btn-ble-soh:hover:not(:disabled) { background-color: #e36a09; }
+    .btn-ble:disabled { background-color: #adb5bd; cursor: not-allowed; }
+
+    /* BOTÕES INLINE NOS CAMPOS */
+    .input-with-btn {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .input-with-btn input {
+      flex: 1;
+    }
+    .btn-inline-ble {
+      padding: 0 14px;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 13px;
+      cursor: pointer;
+      color: white;
+      white-space: nowrap;
+      transition: 0.2s;
+    }
+    .btn-inline-sn { background-color: #17a2b8; }
+    .btn-inline-sn:hover:not(:disabled) { background-color: #138496; }
+    .btn-inline-soh { background-color: #fd7e14; }
+    .btn-inline-soh:hover:not(:disabled) { background-color: #e36a09; }
+    .btn-inline-ble:disabled { background-color: #adb5bd; cursor: not-allowed; }
+
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; flex-wrap: wrap; }
+    .tab-btn { padding: 10px 15px; border: none; background: #e9ecef; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.3s; }
+    .tab-btn:hover { background: #d3d9df; }
+    .tab-btn.active { background: #0056b3; color: white; }
+    
+    .screen { display: none; }
+    .screen.active { display: block; }
+    
+    .form-group { margin-bottom: 15px; }
+    label { font-weight: bold; display: block; margin-bottom: 5px; }
+    input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    
+    .btn-submit { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; font-weight: bold; }
+    .btn-submit:hover { background: #218838; }
+    .btn-submit:disabled { background: #6c757d; cursor: not-allowed; }
+    
+    .dash-cards { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
+    .card { flex: 1; min-width: 120px; text-align: center; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .card h3 { margin: 0; font-size: 24px; color: #333; }
+    .card span { font-size: 12px; color: #666; font-weight: bold; }
+    
+    .msg { margin-top: 15px; font-weight: bold; text-align: center; }
+    
+    .picking-list { background: #e9ecef; padding: 15px; border-radius: 5px; border-left: 5px solid #17a2b8; text-align: left; }
+    .picking-list ul { margin: 0; padding-left: 20px; }
+    .picking-list li { font-size: 16px; padding: 3px 0; }
+
+    /* ESTILOS DAS ABAS TOUCH DE STATUS (MOVIMENTAÇÃO MANUAL) */
+    .status-tabs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .status-tab-card {
+      background-color: #f8f9fa;
+      border: 2px solid #ced4da;
+      border-radius: 8px;
+      padding: 12px 8px;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      touch-action: manipulation;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 54px;
+    }
+    .status-tab-card:hover {
+      background-color: #e2e6ea;
+      border-color: #adb5bd;
+    }
+    .status-tab-card:active {
+      transform: scale(0.96);
+    }
+    .status-tab-title {
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .status-tab-sub {
+      font-size: 11px;
+      color: #6c757d;
+      margin-top: 2px;
+    }
+    .status-tab-card.active {
+      color: #ffffff;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+    }
+    .status-tab-card.active .status-tab-sub {
+      color: rgba(255, 255, 255, 0.9);
+    }
+    .status-tab-card.active[data-status="Em Triagem"] { background-color: #e0a800; border-color: #c69500; }
+    .status-tab-card.active[data-status="Em Manutenção"] { background-color: #fd7e14; border-color: #e36a09; }
+    .status-tab-card.active[data-status="Reserva"] { background-color: #17a2b8; border-color: #117a8b; }
+    .status-tab-card.active[data-status="Em Cliente"] { background-color: #28a745; border-color: #1e7e34; }
+    .status-tab-card.active[data-status="Estoque"] { background-color: #0056b3; border-color: #004085; }
+    
+    /* ESTILOS DAS ABAS TOUCH DE PALETES (MOVIMENTAÇÃO E PÓS-MANUTENÇÃO) */
+    .palete-tabs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .palete-tab-card {
+      background-color: #f8f9fa;
+      border: 2px solid #ced4da;
+      border-radius: 8px;
+      padding: 12px 6px;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      touch-action: manipulation;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 58px;
+    }
+    .palete-tab-card:hover:not(.full) {
+      background-color: #e2e6ea;
+      border-color: #adb5bd;
+    }
+    .palete-tab-card:active:not(.full) {
+      transform: scale(0.96);
+    }
+    .palete-tab-card.active {
+      background-color: #0056b3;
+      border-color: #004085;
+      color: #ffffff;
+      box-shadow: 0 3px 8px rgba(0, 86, 179, 0.35);
+    }
+    .palete-tab-card.full {
+      background-color: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+      cursor: not-allowed;
+      opacity: 0.75;
+    }
+    .palete-tab-title {
+      font-weight: bold;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .palete-tab-count {
+      font-size: 13px;
+      font-weight: bold;
+      color: #495057;
+      background: rgba(0, 0, 0, 0.06);
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+    .palete-tab-card.active .palete-tab-count {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.22);
+    }
+    .palete-tab-card.full .palete-tab-count {
+      color: #721c24;
+      background: rgba(114, 28, 36, 0.1);
+    }
+
+    .matriz-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-top: 10px; background: #e9ecef; padding: 15px; border-radius: 8px; border-bottom: 5px solid #6c757d; }
+    .seat { padding: 10px 5px; text-align: center; border-radius: 4px; font-weight: bold; color: white; cursor: pointer; user-select: none; transition: 0.2s; }
+    .seat.free { background-color: #28a745; } 
+    .seat.free:hover { background-color: #218838; }
+    .seat.occupied { background-color: #dc3545; cursor: not-allowed; opacity: 0.8; } 
+    .seat.selected { background-color: #007bff; box-shadow: 0 0 8px rgba(0, 123, 255, 0.8); transform: scale(1.1); } 
+    
+    .seat.picking { background-color: #ffc107; color: #000; box-shadow: 0 0 10px rgba(255, 193, 7, 0.9); transform: scale(1.15); border: 2px solid #333; cursor: default; }
+    .seat.ignored { background-color: #dee2e6; color: #adb5bd; border: 1px dashed #ccc; cursor: default; }
+
+    .matriz-legenda { display: flex; gap: 15px; margin-top: 10px; font-size: 13px; justify-content: center; }
+    .legenda-item { display: flex; align-items: center; gap: 5px; }
+    .box-legenda { width: 15px; height: 15px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- PAINEL DE CONFIGURAÇÃO DA PLANILHA (GOOGLE APPS SCRIPT URL) -->
+  <div id="apiConfigBar" class="api-config-bar">
+    <span id="apiStatusLabel">⚠️ Planilha Google não vinculada. Clique ao lado para colar o link /exec.</span>
+    <button type="button" class="btn-config-api" onclick="configurarUrlPlanilha()">⚙️ Configurar Link Planilha</button>
+  </div>
+
+  <!-- PAINEL DE CONEXÃO E LEITURA BLUETOOTH (ESP32) -->
+  <div class="ble-bar">
+    <div class="ble-status">
+      <span id="bleDot" class="ble-dot"></span>
+      <span id="bleStatusText">Leitor ESP32: Desconectado</span>
+    </div>
+    <div class="ble-actions">
+      <button type="button" id="btnConectarBLE" class="btn-ble btn-ble-connect" onclick="conectarESP32()">📡 Conectar Leitor</button>
+      <button type="button" class="btn-ble btn-ble-sn btn-req-ble" disabled onclick="solicitarComandoBLE('SN')">📟 Ler SN</button>
+      <button type="button" class="btn-ble btn-ble-soh btn-req-ble" disabled onclick="solicitarComandoBLE('SOH')">🔋 Ler SOH</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="mudarAba('telaDashboardMov', this)">Dashboard & Movimentação</button>
+    <button class="tab-btn" onclick="mudarAba('telaReservaLote', this)">Reserva Automática</button>
+    <button class="tab-btn" onclick="mudarAba('telaExpedicao', this)">Expedição (Retirada)</button>
+    <button class="tab-btn" onclick="mudarAba('telaEntrada', this)">Entrada (Triagem)</button>
+    <button class="tab-btn" onclick="mudarAba('telaPosManut', this)">Pós-Manutenção</button>
+  </div>
+
+  <!-- TELA DASHBOARD -->
+  <div id="telaDashboardMov" class="screen active">
+    <h2>Dashboard Geral</h2>
+    <div id="cardsDashboard" class="dash-cards"><p>Aguardando conexão com a planilha...</p></div>
+    <button type="button" onclick="carregarDashboard()" style="margin-bottom:20px; padding:8px 15px; background:#0056b3; color:white; border:none; border-radius:4px; cursor:pointer;">
+      🔄 Atualizar Dashboard
+    </button>
+    <div id="listaReservas" style="margin-bottom: 20px; display: none; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+      <h3 style="color: #17a2b8; margin-top: 0;">Resumo de Reservas por Cliente</h3>
+      <div style="overflow-x: auto; max-height: 300px; overflow-y: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="background-color: #17a2b8; color: white;">
+              <th style="padding: 10px; border: 1px solid #ddd; position: sticky; top: 0; background: #17a2b8;">Cliente</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: center; position: sticky; top: 0; background: #17a2b8;">Quantidade Reservada</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaReservasBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <hr>
+    <h2>Registrar Movimentação Manual</h2>
+    
+    <form id="formMovimentacao" onsubmit="event.preventDefault();">
+      <div class="form-group">
+        <label>Operador:</label>
+        <input type="text" id="movOperador" class="input-operador" required placeholder="Seu nome">
+      </div>
+      <div class="form-group">
+        <label>Código da Bateria:</label>
+        <div class="input-with-btn">
+          <input type="text" id="movCodigo" required placeholder="Clique em Ler SN ou digite..." onchange="validarCodigoBase(this, 'movMensagem')">
+          <button type="button" class="btn-inline-ble btn-inline-sn btn-req-ble" disabled onclick="solicitarComandoBLE('SN', 'movCodigo', 'movMensagem')">📟 Ler SN</button>
+        </div>
+      </div>
+
+      <!-- ABAS TOUCH PARA NOVO STATUS -->
+      <div class="form-group">
+        <label>Novo Status (Toque para selecionar):</label>
+        <input type="hidden" id="movStatus" required>
+        <div id="movStatusTabs" class="status-tabs-grid">
+          <div class="status-tab-card" data-status="Em Triagem" onclick="selecionarStatusMov(this, 'Em Triagem')">
+            <div class="status-tab-title">Em Triagem</div>
+          </div>
+          <div class="status-tab-card" data-status="Em Manutenção" onclick="selecionarStatusMov(this, 'Em Manutenção')">
+            <div class="status-tab-title">Em Manutenção</div>
+          </div>
+          <div class="status-tab-card" data-status="Reserva" onclick="selecionarStatusMov(this, 'Reserva')">
+            <div class="status-tab-title">Reserva</div>
+            <div class="status-tab-sub">Futuro Cliente</div>
+          </div>
+          <div class="status-tab-card" data-status="Em Cliente" onclick="selecionarStatusMov(this, 'Em Cliente')">
+            <div class="status-tab-title">Em Cliente</div>
+          </div>
+          <div class="status-tab-card" data-status="Estoque" onclick="selecionarStatusMov(this, 'Estoque')">
+            <div class="status-tab-title">Estoque</div>
+            <div class="status-tab-sub">Pronta</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" id="divCliente" style="display: none;">
+        <label>Nome do Cliente:</label>
+        <input type="text" id="movCliente" placeholder="Obrigatório para Cliente/Reserva">
+      </div>
+      
+      <!-- ABAS TOUCH PARA PALETE DE DESTINO (MOVIMENTAÇÃO MANUAL) -->
+      <div class="form-group" id="divPaleteMov" style="display: none;">
+        <label>Palete de Destino (Toque para selecionar):</label>
+        <input type="hidden" id="movPalete">
+        <div id="movPaleteTabs" class="palete-tabs-grid">
+          <div style="grid-column: 1 / -1; text-align: center; color: #666; padding: 10px;">A carregar paletes...</div>
+        </div>
+      </div>
+
+      <div class="form-group" id="divMatrizMov" style="display: none;">
+        <label>Selecione a Posição na Matriz (Frente do palete = Linha 1):</label>
+        <div id="movGrid" class="matriz-grid"></div>
+        <input type="hidden" id="movPosicaoHidden" required>
+        <div class="matriz-legenda">
+          <div class="legenda-item"><div class="box-legenda" style="background:#28a745;"></div> Livre</div>
+          <div class="legenda-item"><div class="box-legenda" style="background:#dc3545;"></div> Ocupado</div>
+          <div class="legenda-item"><div class="box-legenda" style="background:#007bff;"></div> Selecionado</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observações:</label>
+        <textarea id="movObservacoes" rows="2"></textarea>
+      </div>
+      <button type="button" class="btn-submit" onclick="enviarMovimentacao(this)">Guardar Movimentação</button>
+    </form>
+    <div id="movMensagem" class="msg"></div>
+  </div>
+
+  <!-- TELA RESERVA LOTE -->
+  <div id="telaReservaLote" class="screen">
+    <h2>Reserva Automática em Lote</h2>
+    <form id="formReservaLote" onsubmit="event.preventDefault();">
+      <div class="form-group"><label>Operador:</label><input type="text" id="loteOperador" class="input-operador" required></div>
+      <div class="form-group"><label>Nome do Cliente:</label><input type="text" id="loteCliente" required placeholder="Nome da empresa ou cliente"></div>
+      <div class="form-group"><label>Quantidade de Baterias:</label><input type="number" id="loteQuantidade" min="1" required placeholder="Ex: 5"></div>
+      <button type="button" class="btn-submit" onclick="enviarReservaLote(this)" style="background: #17a2b8;">Confirmar Reserva Automática</button>
+    </form>
+    <div id="loteMensagem" class="msg"></div>
+    <div id="loteListaSeriais" style="display: none; margin-top: 15px;" class="picking-list"></div>
+  </div>
+
+  <!-- TELA EXPEDIÇÃO / RETIRADA -->
+  <div id="telaExpedicao" class="screen">
+    <h2>Expedição (Retirada de Baterias)</h2>
+    <form id="formBuscaExpedicao" onsubmit="event.preventDefault(); buscarBateriasParaExpedicao();">
+      <div class="form-group"><label>Nome do Cliente (Pesquisa):</label><input type="text" id="expBuscaCliente" required placeholder="Digite o nome do cliente para buscar"></div>
+      <button type="button" class="btn-submit" onclick="buscarBateriasParaExpedicao()" style="background: #007bff; margin-bottom: 15px;">🔍 Buscar Mapa de Reservas</button>
+    </form>
+    <div id="expMensagemBusca" class="msg" style="margin-bottom: 15px;"></div>
+    <div id="expAreaResultado" style="display: none;">
+      <div id="expListaSeriais" class="picking-list" style="margin-bottom: 15px;"></div>
+      <form id="formConfirmarExpedicao" onsubmit="event.preventDefault();">
+        <div class="form-group"><label>Operador (Quem retirou dos paletes):</label><input type="text" id="expOperador" class="input-operador" required></div>
+        <button type="button" class="btn-submit" onclick="confirmarExpedicao(this)">✅ Confirmar Retirada / Envio ao Cliente</button>
+      </form>
+      <div id="expMensagemConfirmacao" class="msg"></div>
+    </div>
+  </div>
+
+  <!-- TELA ENTRADA -->
+  <div id="telaEntrada" class="screen">
+    <h2>Cadastro Inicial (Triagem)</h2>
+    <form id="formEntrada" onsubmit="event.preventDefault();">
+      <div class="form-group"><label>Operador:</label><input type="text" id="entOperador" class="input-operador" required></div>
+      <div class="form-group">
+        <label>Código da Bateria:</label>
+        <div class="input-with-btn">
+          <input type="text" id="entCodigo" required placeholder="Clique em Ler SN ou digite..." onchange="validarCodigoBase(this, 'entMensagem')">
+          <button type="button" class="btn-inline-ble btn-inline-sn btn-req-ble" disabled onclick="solicitarComandoBLE('SN', 'entCodigo', 'entMensagem')">📟 Ler SN</button>
+        </div>
+      </div>
+      <div class="form-group" style="display:flex; gap:10px; align-items:center;">
+        <input type="checkbox" id="entSemSN" tabindex="-1" style="width:20px; height:20px;"><label for="entSemSN" style="margin:0;">Bateria SEM Serial (Usar Temporário)</label>
+      </div>
+      <div class="form-group">
+        <label>SOH Inicial (%):</label>
+        <div class="input-with-btn">
+          <input type="text" id="entSoh" required placeholder="Ex: 85">
+          <button type="button" class="btn-inline-ble btn-inline-soh btn-req-ble" disabled onclick="solicitarComandoBLE('SOH', 'entSoh', 'entMensagem')">🔋 Ler SOH</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Troca de Plug:</label>
+        <select id="entPlug"><option value="Não">Não</option><option value="Sim">Sim</option></select>
+      </div>
+      <div class="form-group">
+        <label>Status da Comunicação:</label>
+        <select id="entCom"><option value="OK">OK</option><option value="Falha">Falha</option></select>
+      </div>
+      <div class="form-group"><label>Observações:</label><textarea id="entObs" rows="2"></textarea></div>
+      <button type="button" class="btn-submit" onclick="enviarEntrada(this)">Registrar Entrada</button>
+    </form>
+    <div id="entMensagem" class="msg"></div>
+  </div>
+
+  <!-- TELA PÓS-MANUTENÇÃO -->
+  <div id="telaPosManut" class="screen">
+    <h2>Leitura Pós-Manutenção</h2>
+    <form id="formPos" onsubmit="event.preventDefault();">
+      <div class="form-group"><label>Técnico / Operador:</label><input type="text" id="posOperador" class="input-operador" required></div>
+      <div class="form-group">
+        <label>Código da Bateria:</label>
+        <div class="input-with-btn">
+          <input type="text" id="posCodigo" required placeholder="Clique em Ler SN ou digite..." onchange="validarCodigoBase(this, 'posMensagem')">
+          <button type="button" class="btn-inline-ble btn-inline-sn btn-req-ble" disabled onclick="solicitarComandoBLE('SN', 'posCodigo', 'posMensagem')">📟 Ler SN</button>
+        </div>
+      </div>
+      <div class="form-group" style="display:flex; gap:10px; align-items:center;">
+        <input type="checkbox" id="posSemSN" tabindex="-1" style="width:20px; height:20px;"><label for="posSemSN" style="margin:0;">Bateria SEM Serial (Usar Temporário)</label>
+      </div>
+      <div class="form-group"><label>SOH Inicial (Antes):</label><input type="text" id="posSohIni" placeholder="Digite ou busque na base" required></div>
+      <div class="form-group">
+        <label>SOH Pós-Manutenção (%):</label>
+        <div class="input-with-btn">
+          <input type="text" id="posSohFim" placeholder="Ex: 95" required>
+          <button type="button" class="btn-inline-ble btn-inline-soh btn-req-ble" disabled onclick="solicitarComandoBLE('SOH', 'posSohFim', 'posMensagem')">🔋 Ler SOH</button>
+        </div>
+      </div>
+      
+      <!-- ABAS TOUCH PARA PALETE DE DESTINO (PÓS-MANUTENÇÃO) -->
+      <div class="form-group">
+        <label>Palete de Destino (Toque para selecionar):</label>
+        <input type="hidden" id="posPalete" required>
+        <div id="posPaleteTabs" class="palete-tabs-grid">
+          <div style="grid-column: 1 / -1; text-align: center; color: #666; padding: 10px;">A carregar paletes...</div>
+        </div>
+      </div>
+
+      <div class="form-group" id="divMatrizPos" style="display: none;">
+        <label>Selecione a Posição na Matriz (Frente do palete = Linha 1):</label>
+        <div id="posGrid" class="matriz-grid"></div>
+        <input type="hidden" id="posPosicaoHidden" required>
+        <div class="matriz-legenda">
+          <div class="legenda-item"><div class="box-legenda" style="background:#28a745;"></div> Livre</div>
+          <div class="legenda-item"><div class="box-legenda" style="background:#dc3545;"></div> Ocupado</div>
+          <div class="legenda-item"><div class="box-legenda" style="background:#007bff;"></div> Selecionado</div>
+        </div>
+      </div>
+      <div class="form-group"><label>Observações:</label><textarea id="posObs" rows="2"></textarea></div>
+      <button type="button" class="btn-submit" onclick="enviarPosManutencao(this)">Registrar Pós-Manutenção</button>
+    </form>
+    <div id="posMensagem" class="msg"></div>
+  </div>
+
+</div>
+
+<script>
+  // =========================================================
+  // CONEXÃO COM A API DO GOOGLE APPS SCRIPT (FETCH)
+  // =========================================================
+  // Você pode colar sua URL /exec diretamente abaixo entre as aspas,
+  // ou configurar pelo botão "Configurar Link Planilha" na própria tela!
+  const URL_APPS_SCRIPT_PADRAO = "";
+
+  function obterUrlApi() {
+    return localStorage.getItem('urlAppsScriptBaterias') || URL_APPS_SCRIPT_PADRAO;
+  }
+
+  function atualizarBarraApi() {
+    const url = obterUrlApi();
+    const bar = document.getElementById('apiConfigBar');
+    const lbl = document.getElementById('apiStatusLabel');
+    if (url && url.startsWith('https://script.google.com/')) {
+      bar.classList.add('ok');
+      lbl.innerText = "✅ Planilha Google Conectada";
+    } else {
+      bar.classList.remove('ok');
+      lbl.innerText = "⚠️ Planilha Google não vinculada. Clique ao lado para colar o link /exec.";
+    }
+  }
+
+  function configurarUrlPlanilha() {
+    const atual = obterUrlApi();
+    const novaUrl = prompt(
+      "Cole a URL da sua Web App do Google Apps Script (terminada em /exec):",
+      atual
+    );
+    if (novaUrl !== null) {
+      const limpa = novaUrl.trim();
+      if (limpa && !limpa.startsWith('https://script.google.com/')) {
+        alert("A URL precisa começar com https://script.google.com/ e terminar em /exec");
+        return;
+      }
+      localStorage.setItem('urlAppsScriptBaterias', limpa);
+      atualizarBarraApi();
+      if (limpa) {
+        carregarDashboard();
+        carregarPaletesDisponiveis();
+      }
+    }
+  }
+
+  async function chamarBackend(acao, dados = {}) {
+    const url = obterUrlApi();
+    if (!url) {
+      throw new Error("Configure o link /exec da Planilha Google no topo da página primeiro.");
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ acao: acao, dados: dados })
+    });
+
+    const json = await response.json();
+    if (json && json.erro) {
+      throw new Error(json.erro);
+    }
+    return json;
+  }
+
+  // =========================================================
+  // COMUNICAÇÃO WEB BLUETOOTH COM ESP32 (Leitor_VMOTO)
+  // =========================================================
+  const BLE_SERVICE_UUID   = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+  const BLE_CHAR_CMD_UUID  = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+  const BLE_CHAR_RESP_UUID = "1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e";
+
+  let bleDevice = null;
+  let bleCmdChar = null;
+  let bleRespChar = null;
+  let alvoInputIdAtual = null;
+  let alvoMsgIdAtual = null;
+
+  function atualizarEstadoBotoesBLE(conectado) {
+    const dot = document.getElementById('bleDot');
+    const txt = document.getElementById('bleStatusText');
+    const btnCon = document.getElementById('btnConectarBLE');
+    const btnsReq = document.querySelectorAll('.btn-req-ble');
+
+    if (conectado) {
+      dot.classList.add('connected');
+      txt.innerText = "Leitor ESP32: Conectado";
+      btnCon.innerText = "🔌 Desconectar";
+      btnCon.style.backgroundColor = "#dc3545";
+      btnsReq.forEach(b => b.disabled = false);
+    } else {
+      dot.classList.remove('connected');
+      txt.innerText = "Leitor ESP32: Desconectado";
+      btnCon.innerText = "📡 Conectar Leitor";
+      btnCon.style.backgroundColor = "#0056b3";
+      btnsReq.forEach(b => b.disabled = true);
+    }
+  }
+
+  async function conectarESP32() {
+    if (bleDevice && bleDevice.gatt.connected) {
+      bleDevice.gatt.disconnect();
+      return;
+    }
+
+    if (!navigator.bluetooth) {
+      alert("Seu navegador não suporta Web Bluetooth. Use Google Chrome ou Microsoft Edge.");
+      return;
+    }
+
+    try {
+      document.getElementById('bleStatusText').innerText = "Leitor ESP32: Procurando...";
+      
+      bleDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ name: 'Leitor_VMOTO' }],
+        optionalServices: [BLE_SERVICE_UUID]
+      });
+
+      bleDevice.addEventListener('gattserverdisconnected', () => {
+        atualizarEstadoBotoesBLE(false);
+      });
+
+      const server = await bleDevice.gatt.connect();
+      const service = await server.getPrimaryService(BLE_SERVICE_UUID);
+      
+      bleCmdChar = await service.getCharacteristic(BLE_CHAR_CMD_UUID);
+      bleRespChar = await service.getCharacteristic(BLE_CHAR_RESP_UUID);
+
+      await bleRespChar.startNotifications();
+      bleRespChar.addEventListener('characteristicvaluechanged', aoReceberDadoESP32);
+
+      atualizarEstadoBotoesBLE(true);
+    } catch (error) {
+      console.error("Erro BLE:", error);
+      atualizarEstadoBotoesBLE(false);
+      if (error.name !== 'NotFoundError') {
+        alert("Erro ao conectar Bluetooth: " + error.message);
+      }
+    }
+  }
+
+  function obterAlvosAtivos(tipoComando) {
+    if (document.getElementById('telaEntrada').classList.contains('active')) {
+      return {
+        input: tipoComando === 'SN' ? 'entCodigo' : 'entSoh',
+        msg: 'entMensagem'
+      };
+    }
+    if (document.getElementById('telaPosManut').classList.contains('active')) {
+      return {
+        input: tipoComando === 'SN' ? 'posCodigo' : 'posSohFim',
+        msg: 'posMensagem'
+      };
+    }
+    return {
+      input: tipoComando === 'SN' ? 'movCodigo' : null,
+      msg: 'movMensagem'
+    };
+  }
+
+  async function solicitarComandoBLE(comando, inputIdOpcional, msgIdOpcional) {
+    if (!bleCmdChar) {
+      alert("Conecte o Leitor ESP32 primeiro!");
+      return;
+    }
+
+    const alvos = obterAlvosAtivos(comando);
+    alvoInputIdAtual = inputIdOpcional || alvos.input;
+    alvoMsgIdAtual = msgIdOpcional || alvos.msg;
+
+    if (!alvoInputIdAtual) {
+      alert("Esta tela não possui campo para receber " + comando + ". Abra a aba Entrada ou Pós-Manutenção.");
+      return;
+    }
+
+    const msgDiv = document.getElementById(alvoMsgIdAtual);
+    if (msgDiv) {
+      msgDiv.innerHTML = `<span style="color: #0056b3;">⏳ Solicitando ${comando} ao ESP32...</span>`;
+    }
+
+    try {
+      const encoder = new TextEncoder();
+      await bleCmdChar.writeValue(encoder.encode(comando));
+    } catch (error) {
+      console.error("Erro ao enviar comando:", error);
+      if (msgDiv) {
+        msgDiv.innerHTML = `<span style="color: red;">❌ Erro ao enviar comando Bluetooth: ${error.message}</span>`;
+      }
+    }
+  }
+
+  function aoReceberDadoESP32(event) {
+    const decoder = new TextDecoder('utf-8');
+    const resposta = decoder.decode(event.target.value).trim();
+    console.log("Recebido do ESP32:", resposta);
+
+    const msgDiv = alvoMsgIdAtual ? document.getElementById(alvoMsgIdAtual) : null;
+
+    if (resposta.startsWith("ERR:")) {
+      const erroTexto = resposta.substring(4);
+      if (msgDiv) {
+        msgDiv.innerHTML = `<span style="color: red;">⚠️ ${erroTexto}</span>`;
+      }
+      return;
+    }
+
+    if (resposta.startsWith("SN:")) {
+      const snLido = resposta.substring(3).trim();
+      const inputSn = document.getElementById(alvoInputIdAtual);
+      if (inputSn) {
+        inputSn.value = snLido;
+        validarCodigoBase(inputSn, alvoMsgIdAtual);
+      }
+    } 
+    else if (resposta.startsWith("SOH:")) {
+      const sohLido = resposta.substring(4).trim();
+      const inputSoh = document.getElementById(alvoInputIdAtual);
+      if (inputSoh) {
+        inputSoh.value = sohLido;
+        if (msgDiv) {
+          msgDiv.innerHTML = `<span style="color: green;">✅ SOH lido com sucesso: <b>${sohLido}%</b></span>`;
+        }
+      }
+    }
+  }
+
+  // =========================================================
+  // LÓGICA DA APLICAÇÃO
+  // =========================================================
+  var bateriasParaExpedir = [];
+  var clienteParaExpedir = "";
+
+  document.addEventListener('DOMContentLoaded', function() {
+    atualizarBarraApi();
+    if (obterUrlApi()) {
+      carregarDashboard();
+      carregarPaletesDisponiveis();
+    }
+    
+    var camposOperador = document.querySelectorAll('.input-operador');
+    var operadorSalvo = localStorage.getItem('operadorFixo');
+    
+    camposOperador.forEach(function(campo) {
+      if (operadorSalvo) campo.value = operadorSalvo;
+      campo.addEventListener('input', function() {
+        var valor = this.value;
+        localStorage.setItem('operadorFixo', valor);
+        camposOperador.forEach(function(c) { if(c !== campo) c.value = valor; });
+      });
+    });
+  });
+
+  function selecionarStatusMov(elemento, valorStatus) {
+    document.querySelectorAll('#movStatusTabs .status-tab-card').forEach(function(card) {
+      card.classList.remove('active');
+    });
+    elemento.classList.add('active');
+    document.getElementById('movStatus').value = valorStatus;
+    verificarInputsDinamicosMov();
+  }
+
+  function selecionarPaleteAba(contexto, elemento, codigoPalete) {
+    var tabsId = contexto === 'mov' ? 'movPaleteTabs' : 'posPaleteTabs';
+    var hiddenPaleteId = contexto === 'mov' ? 'movPalete' : 'posPalete';
+    var divMatrizId = contexto === 'mov' ? 'divMatrizMov' : 'divMatrizPos';
+    var gridId = contexto === 'mov' ? 'movGrid' : 'posGrid';
+    var hiddenPosId = contexto === 'mov' ? 'movPosicaoHidden' : 'posPosicaoHidden';
+
+    var todosCards = document.querySelectorAll('#' + tabsId + ' .palete-tab-card');
+    todosCards.forEach(function(card) { card.classList.remove('active'); });
+    
+    elemento.classList.add('active');
+    document.getElementById(hiddenPaleteId).value = codigoPalete;
+
+    var divMatriz = document.getElementById(divMatrizId);
+    if (codigoPalete) {
+      divMatriz.style.display = 'block';
+      renderizarMatriz(gridId, hiddenPosId, codigoPalete);
+    } else {
+      divMatriz.style.display = 'none';
+      document.getElementById(hiddenPosId).value = '';
+    }
+  }
+
+  async function renderizarMatriz(containerId, hiddenInputId, palete) {
+    var container = document.getElementById(containerId);
+    var hiddenInput = document.getElementById(hiddenInputId);
+    container.innerHTML = '<div style="grid-column: span 6; text-align: center;">A carregar mapa...</div>';
+    hiddenInput.value = '';
+
+    try {
+      const ocupadas = await chamarBackend('obterPosicoesOcupadasPorPalete', { palete: palete });
+      var colunas = ['A', 'B', 'C', 'D', 'E', 'F'];
+      var html = '';
+      for (var l = 4; l >= 1; l--) {
+        for (var c = 0; c < colunas.length; c++) {
+          var pos = l + colunas[c];
+          var isOcupada = ocupadas.indexOf(pos) !== -1;
+          if (isOcupada) {
+            html += '<div class="seat occupied" title="Já ocupada">' + pos + '</div>';
+          } else {
+            html += `<div class="seat free" onclick="selecionarAssento(this, '${pos}', '${hiddenInputId}', '${containerId}')">${pos}</div>`;
+          }
+        }
+      }
+      container.innerHTML = html;
+    } catch (e) {
+      container.innerHTML = '<div style="grid-column: span 6; color: red; text-align: center;">Erro ao carregar mapa: ' + e.message + '</div>';
+    }
+  }
+
+  function renderizarMapasPicking(listaBaterias) {
+    var paletesGroup = {};
+    listaBaterias.forEach(function(b) {
+      var partes = b.palete ? b.palete.split(" - ") : [];
+      var pBase = partes.length > 0 ? partes[0].trim() : "Sem Palete";
+      var pCoord = partes.length > 1 ? partes[1].trim() : "";
+      if (!paletesGroup[pBase]) paletesGroup[pBase] = {};
+      if (pCoord) paletesGroup[pBase][pCoord] = b.codigo;
+    });
+
+    var htmlFinal = "<h4>Mapa Visual de Retirada (Baterias em Amarelo):</h4>";
+    var colunas = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    for (var pBase in paletesGroup) {
+      if (pBase === "Sem Palete" || pBase === "Expedida") continue; 
+      htmlFinal += "<div style='margin-bottom: 20px;'>";
+      htmlFinal += "<strong style='color: #0056b3; font-size:18px;'>Palete: " + pBase + "</strong>";
+      htmlFinal += "<div class='matriz-grid'>";
+      for (var l = 4; l >= 1; l--) {
+        for (var c = 0; c < colunas.length; c++) {
+          var pos = l + colunas[c];
+          var codigoBat = paletesGroup[pBase][pos];
+          if (codigoBat) {
+            htmlFinal += "<div class='seat picking' title='Tirar Bateria: " + codigoBat + "'>" + pos + "</div>";
+          } else {
+            htmlFinal += "<div class='seat ignored'>" + pos + "</div>";
+          }
+        }
+      }
+      htmlFinal += "</div></div>";
+    }
+
+    htmlFinal += "<h4>Lista de Seriais:</h4><ul>";
+    listaBaterias.forEach(function(b) {
+      htmlFinal += "<li><strong>" + b.codigo + "</strong> &nbsp;&rarr;&nbsp; Local: <b style='color:#0056b3;'>" + (b.palete || 'Sem Palete') + "</b></li>";
+    });
+    htmlFinal += "</ul><p style='margin-top:10px; font-size:12px;'>* O traço grosso na base do mapa representa a frente do palete.</p>";
+    return htmlFinal;
+  }
+
+  function selecionarAssento(elemento, posicao, hiddenInputId, containerId) {
+    var container = document.getElementById(containerId);
+    var assentos = container.querySelectorAll('.seat');
+    assentos.forEach(function(a) {
+      if (a.classList.contains('selected')) {
+        a.classList.remove('selected');
+        a.classList.add('free');
+      }
+    });
+    elemento.classList.remove('free');
+    elemento.classList.add('selected');
+    document.getElementById(hiddenInputId).value = posicao;
+  }
+
+  function mudarAba(idTela, btnElemento) {
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(idTela).classList.add('active');
+    if (btnElemento) btnElemento.classList.add('active');
+  }
+
+  function gerarHtmlAbasPaletes(listaPaletes, contexto, paleteSelecionadoAtual) {
+    var htmlTabs = '';
+    listaPaletes.forEach(function(p) {
+      var isFull = !p.disponivel;
+      var isActive = (paleteSelecionadoAtual === p.codigo && !isFull);
+      var classes = 'palete-tab-card' + (isFull ? ' full' : '') + (isActive ? ' active' : '');
+      var onclickAttr = isFull ? '' : `onclick="selecionarPaleteAba('${contexto}', this, '${p.codigo}')"`;
+
+      htmlTabs += `<div class="${classes}" ${onclickAttr}>`;
+      htmlTabs += `  <div class="palete-tab-title">${p.nome}</div>`;
+      htmlTabs += `  <div class="palete-tab-count">${p.ocupadas}/${p.capacidade}</div>`;
+      htmlTabs += `</div>`;
+    });
+    return htmlTabs;
+  }
+
+  async function carregarPaletesDisponiveis() {
+    try {
+      const listaPaletes = await chamarBackend('obterStatusPaletes');
+      var movSelecionado = document.getElementById('movPalete').value;
+      var posSelecionado = document.getElementById('posPalete').value;
+
+      document.getElementById('movPaleteTabs').innerHTML = gerarHtmlAbasPaletes(listaPaletes, 'mov', movSelecionado);
+      document.getElementById('posPaleteTabs').innerHTML = gerarHtmlAbasPaletes(listaPaletes, 'pos', posSelecionado);
+    } catch (e) {
+      console.error("Erro ao carregar paletes:", e);
+    }
+  }
+
+  async function validarCodigoBase(campoInput, idDivMensagem) {
+    var valorLido = campoInput.value.trim();
+    if (valorLido === '') return;
+
+    var partes = valorLido.split('-');
+    var codigoBipado = partes[0].trim();
+    campoInput.value = codigoBipado; 
+
+    if (partes.length > 1) {
+      var sohLido = partes[1].trim();
+      var entSoh = document.getElementById('entSoh');
+      if (entSoh && document.getElementById('telaEntrada').classList.contains('active')) {
+        entSoh.value = sohLido;
+      }
+      var posSohFim = document.getElementById('posSohFim');
+      if (posSohFim && document.getElementById('telaPosManut').classList.contains('active')) {
+        posSohFim.value = sohLido;
+      }
+    }
+
+    var ehTelaPos = document.getElementById('telaPosManut').classList.contains('active');
+    var ehTelaEntrada = document.getElementById('telaEntrada').classList.contains('active');
+
+    if (ehTelaEntrada) {
+      var msgEnt = document.getElementById(idDivMensagem);
+      msgEnt.innerHTML = '<span style="color: green;">✅ Serial capturado: <b>' + codigoBipado + '</b> (Pronto para ler SOH)</span>';
+      return;
+    }
+
+    var msgDiv = document.getElementById(idDivMensagem);
+    msgDiv.innerHTML = '<span style="color: blue;">A verificar na Base de Dados...</span>';
+    
+    var modoEnvio = ehTelaPos ? 'pos' : 'movimentacao';
+
+    try {
+      const resposta = await chamarBackend('buscarCodigo', {
+        codigoBipado: codigoBipado,
+        modo: modoEnvio,
+        ehSemSN: false
+      });
+
+      if (resposta && resposta.encontrado) { 
+        if (resposta.duplicado) {
+          msgDiv.innerHTML = '<span style="color: #d39e00;">' + resposta.mensagem + '</span>';
+        } else {
+          msgDiv.innerHTML = '<span style="color: green;">✅ Válida (' + (resposta.descricao || '') + ')</span>'; 
+        }
+
+        if (ehTelaPos) {
+          var campoSohIni = document.getElementById('posSohIni');
+          if (campoSohIni && resposta.sohInicial && resposta.sohInicial !== "Não registrado") {
+            campoSohIni.value = resposta.sohInicial;
+          }
+        }
+      } else { 
+        msgDiv.innerHTML = '<span style="color: red;">❌ NÃO CADASTRADA NA BASE</span>'; 
+        campoInput.value = ''; 
+        if (ehTelaPos) {
+          document.getElementById('posSohIni').value = '';
+        }
+      }
+    } catch (e) {
+      msgDiv.innerHTML = '<span style="color: red;">❌ Erro: ' + e.message + '</span>';
+    }
+  }
+  
+  async function carregarDashboard() {
+    var divCards = document.getElementById('cardsDashboard');
+    divCards.innerHTML = '<p>A carregar dados...</p>';
+    try {
+      const resumo = await chamarBackend('obterResumoDashboard');
+      divCards.innerHTML = `
+        <div class="card" style="border-bottom: 4px solid #0056b3;"><h3 style="color:#0056b3;">${resumo['Total_Bons'] || 0}</h3><span>Total (SOH > 50%)</span></div>
+        <div class="card" style="border-bottom: 4px solid #dc3545; background-color: #fff3f3;"><h3 style="color:#dc3545;">${resumo['Criticos'] || 0}</h3><span style="color:#dc3545;">SOH Crítico (≤ 50%)</span></div>
+        <div class="card" style="border-bottom: 4px solid #ffc107;"><h3>${resumo['Em Triagem'] || 0}</h3><span>Em Triagem</span></div>
+        <div class="card" style="border-bottom: 4px solid #fd7e14;"><h3>${resumo['Em Manutenção'] || 0}</h3><span>Em Manutenção</span></div>
+        <div class="card" style="border-bottom: 4px solid #17a2b8;"><h3>${resumo['Reserva'] || 0}</h3><span>Reservadas</span></div>
+        <div class="card" style="border-bottom: 4px solid #28a745;"><h3>${resumo['Em Cliente'] || 0}</h3><span>Nos Clientes</span></div>
+        <div class="card" style="border-bottom: 4px solid #20c997;"><h3>${resumo['Estoque'] || 0}</h3><span>Estoque Prontas</span></div>
+      `;
+      carregarTabelaReservas();
+      carregarPaletesDisponiveis(); 
+    } catch (e) {
+      divCards.innerHTML = `<p style="color:red;">❌ ${e.message}</p>`;
+    }
+  }
+
+  async function carregarTabelaReservas() {
+    try {
+      const reservas = await chamarBackend('obterBateriasReservadasAgrupadas');
+      var divLista = document.getElementById('listaReservas');
+      var tbody = document.getElementById('tabelaReservasBody');
+      tbody.innerHTML = ''; 
+      if (reservas && reservas.length > 0) {
+        divLista.style.display = 'block'; 
+        reservas.forEach(function(reserva) {
+          tbody.innerHTML += `<tr>
+            <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">${reserva.cliente}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 18px; font-weight: bold; color: #17a2b8;">${reserva.quantidade}</td>
+          </tr>`;
+        });
+      } else { divLista.style.display = 'none'; }
+    } catch (e) {
+      console.error("Erro ao carregar reservas:", e);
+    }
+  }
+
+  async function enviarReservaLote(btn) {
+    var msgDiv = document.getElementById('loteMensagem');
+    var divListaPicking = document.getElementById('loteListaSeriais');
+    var dados = {
+      operador: document.getElementById('loteOperador').value,
+      cliente: document.getElementById('loteCliente').value,
+      quantidade: document.getElementById('loteQuantidade').value
+    };
+
+    if (!dados.cliente || !dados.quantidade || dados.quantidade <= 0) return alert('Preencha os dados.');
+    btn.disabled = true;
+    divListaPicking.style.display = 'none';
+    msgDiv.innerHTML = '<span style="color: blue;">A processar e a gerar Mapa de Retirada...</span>';
+
+    try {
+      const res = await chamarBackend('reservarBateriasAutomaticamente', dados);
+      if (res.sucesso) {
+        msgDiv.innerHTML = '<span style="color: green;">✅ ' + res.mensagem + '</span>';
+        document.getElementById('loteCliente').value = '';
+        document.getElementById('loteQuantidade').value = '';
+        carregarDashboard();
+        divListaPicking.innerHTML = renderizarMapasPicking(res.selecionadas);
+        divListaPicking.style.display = 'block';
+      } else { msgDiv.innerHTML = '<span style="color: red;">❌ ' + res.mensagem + '</span>'; }
+    } catch (e) {
+      msgDiv.innerHTML = '<span style="color: red;">❌ ' + e.message + '</span>';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function buscarBateriasParaExpedicao() {
+    var clienteBusca = document.getElementById('expBuscaCliente').value.trim();
+    var msgDiv = document.getElementById('expMensagemBusca');
+    var areaResultado = document.getElementById('expAreaResultado');
+    var listaSeriais = document.getElementById('expListaSeriais');
+
+    if (!clienteBusca) return alert('Por favor, digite o nome do cliente.');
+    msgDiv.innerHTML = '<span style="color: blue;">A procurar reservas e a gerar o mapa...</span>';
+    areaResultado.style.display = 'none';
+
+    try {
+      const res = await chamarBackend('buscarReservasPorCliente', { clienteBusca: clienteBusca });
+      if (res.sucesso) {
+        msgDiv.innerHTML = '<span style="color: green;">✅ Reservas para: <b>' + res.clienteExato + '</b></span>';
+        bateriasParaExpedir = res.lista;
+        clienteParaExpedir = res.clienteExato;
+        listaSeriais.innerHTML = renderizarMapasPicking(res.lista);
+        areaResultado.style.display = 'block';
+      } else {
+        msgDiv.innerHTML = '<span style="color: red;">❌ ' + res.mensagem + '</span>';
+        bateriasParaExpedir = [];
+      }
+    } catch (e) {
+      msgDiv.innerHTML = '<span style="color: red;">❌ ' + e.message + '</span>';
+    }
+  }
+
+  async function confirmarExpedicao(btn) {
+    var operador = document.getElementById('expOperador').value.trim();
+    var msgConf = document.getElementById('expMensagemConfirmacao');
+
+    if (!operador) return alert('Por favor, insira o nome do operador.');
+    if (bateriasParaExpedir.length === 0) return;
+
+    btn.disabled = true;
+    msgConf.innerHTML = '<span style="color: blue;">A registar saída...</span>';
+
+    try {
+      const res = await chamarBackend('processarExpedicaoLote', {
+        operador: operador,
+        cliente: clienteParaExpedir,
+        baterias: bateriasParaExpedir
+      });
+      if (res.sucesso) {
+        msgConf.innerHTML = '<span style="color: green;">✅ ' + res.mensagem + '</span>';
+        document.getElementById('expBuscaCliente').value = '';
+        setTimeout(function(){
+          document.getElementById('expAreaResultado').style.display = 'none';
+          document.getElementById('expMensagemBusca').innerHTML = '';
+        }, 3000);
+        carregarDashboard();
+      } else { msgConf.innerHTML = '<span style="color: red;">❌ ' + res.mensagem + '</span>'; }
+    } catch (e) {
+      msgConf.innerHTML = '<span style="color: red;">❌ ' + e.message + '</span>';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function verificarInputsDinamicosMov() {
+    var status = document.getElementById('movStatus').value;
+    var divCliente = document.getElementById('divCliente');
+    var divPaleteMov = document.getElementById('divPaleteMov');
+    var divMatrizMov = document.getElementById('divMatrizMov');
+    
+    if (status === 'Em Cliente' || status === 'Reserva') { 
+      divCliente.style.display = 'block'; 
+    } else { 
+      divCliente.style.display = 'none'; 
+    }
+
+    if (status === 'Estoque') { 
+      divPaleteMov.style.display = 'block'; 
+    } else { 
+      divPaleteMov.style.display = 'none'; 
+      divMatrizMov.style.display = 'none'; 
+      document.getElementById('movPalete').value = '';
+      document.getElementById('movPosicaoHidden').value = ''; 
+      document.querySelectorAll('#movPaleteTabs .palete-tab-card').forEach(function(c) {
+        c.classList.remove('active');
+      });
+    }
+  }
+
+  async function enviarMovimentacao(btn) {
+    var msgDiv = document.getElementById('movMensagem');
+    var dados = {
+      codigo: document.getElementById('movCodigo').value,
+      operador: document.getElementById('movOperador').value,
+      status: document.getElementById('movStatus').value,
+      cliente: document.getElementById('movCliente').value,
+      paleteBase: document.getElementById('movPalete').value,
+      posicao: document.getElementById('movPosicaoHidden').value,
+      observacoes: document.getElementById('movObservacoes').value
+    };
+
+    if (!dados.codigo || !dados.status) return alert('Preencha o Código e selecione o Novo Status.');
+    if (dados.status === 'Estoque' && (!dados.paleteBase || !dados.posicao)) return alert('Toque em um Palete e clique num assento VERDE (livre) da Matriz.');
+
+    btn.disabled = true;
+    msgDiv.innerHTML = '<span style="color: blue;">A registar...</span>';
+
+    try {
+      const res = await chamarBackend('registrarMovimentacao', dados);
+      if (res.sucesso) {
+        msgDiv.innerHTML = '<span style="color: green;">' + res.mensagem + '</span>';
+        document.getElementById('movCodigo').value = '';
+        document.getElementById('movPosicaoHidden').value = '';
+        document.getElementById('divMatrizMov').style.display = 'none';
+        document.getElementById('movPalete').value = '';
+        document.querySelectorAll('#movPaleteTabs .palete-tab-card').forEach(function(c) {
+          c.classList.remove('active');
+        });
+        carregarDashboard();
+      } else { msgDiv.innerHTML = '<span style="color: red;">❌ ' + res.mensagem + '</span>'; }
+    } catch (e) {
+      msgDiv.innerHTML = '<span style="color: red;">❌ ' + e.message + '</span>';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function enviarEntrada(btn) {
+    var msgDiv = document.getElementById('entMensagem');
+    var dados = {
+      codigo: document.getElementById('entCodigo').value,
+      operador: document.getElementById('entOperador').value,
+      soh: document.getElementById('entSoh').value,
+      trocaPlug: document.getElementById('entPlug').value,
+      statusCom: document.getElementById('entCom').value,
+      observacoes: document.getElementById('entObs').value,
+      ehSemSN: document.getElementById('entSemSN').checked
+    };
+
+    if (!dados.codigo || (!dados.soh && !dados.ehSemSN)) {
+      return alert('Por favor, preencha o Código da bateria e o SOH Inicial.');
+    }
+
+    btn.disabled = true;
+    msgDiv.innerHTML = '<span style="color: blue;">A gravar entrada...</span>';
+
+    try {
+      const res = await chamarBackend('salvarCadastroInicial', dados);
+      msgDiv.innerHTML = '<span style="color: ' + (res.sucesso ? 'green' : 'red') + ';">' + res.mensagem + '</span>';
+      if(res.sucesso) {
+        document.getElementById('entCodigo').value = '';
+        document.getElementById('entSoh').value = '';
+        carregarDashboard();
+        document.getElementById('entCodigo').focus();
+      }
+    } catch (e) {
+      msgDiv.innerHTML = '<span style="color: red;">❌ ' + e.message + '</span>';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function enviarPosManutencao(btn) {
+    var msgDiv = document.getElementById('posMensagem');
+    var dados = {
+      codigo: document.getElementById('posCodigo').value,
+      operador: document.getElementById('posOperador').value,
+      sohInicial: document.getElementById('posSohIni').value,
+      sohPos: document.getElementById('posSohFim').value,
+      paleteBase: document.getElementById('posPalete').value,
+      posicao: document.getElementById('posPosicaoHidden').value,
+      observacoes: document.getElementById('posObs').value,
+      ehSemSN: document.getElementById('posSemSN').checked
+    };
+
+    if (!dados.codigo || !dados.sohPos) {
+      return alert('Preencha o Código e o SOH Pós-Manutenção.');
+    }
+    if (!dados.paleteBase || !dados.posicao) {
+      return alert('Toque em um Palete e clique num assento VERDE (livre) do mapa para guardar a bateria.');
+    }
+
+    btn.disabled = true;
+    msgDiv.innerHTML = '<span style="color: blue;">A gravar pós-manutenção...</span>';
+
+    try {
+      const res = await chamarBackend('salvarPosManutencao', dados);
+      if(res.sucesso) {
+        msgDiv.innerHTML = '<span style="color: green;">' + res.mensagem + '</span>';
+        document.getElementById('posCodigo').value = '';
+        document.getElementById('posSohFim').value = '';
+        document.getElementById('posPosicaoHidden').value = '';
+        document.getElementById('divMatrizPos').style.display = 'none';
+        document.getElementById('posPalete').value = '';
+        document.querySelectorAll('#posPaleteTabs .palete-tab-card').forEach(function(c) {
+          c.classList.remove('active');
+        });
+        carregarDashboard();
+        document.getElementById('posCodigo').focus();
+      } else {
+        msgDiv.innerHTML = '<span style="color: red;">❌ ' + res.mensagem + '</span>';
+      }
+    } catch (e) {
+      msgDiv.innerHTML = '<span style="color: red;">❌ ' + e.message + '</span>';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+</script>
+</body>
+</html>
